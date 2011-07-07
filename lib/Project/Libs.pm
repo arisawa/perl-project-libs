@@ -5,6 +5,7 @@ use warnings;
 use Cwd;
 use FindBin;
 use FindBin::libs;
+use Config;
 
 our $VERSION = '0.01';
 
@@ -20,10 +21,11 @@ sub import {
     my $current_dir = getcwd;
 
     my $lib_dirs           = delete $args{lib_dirs}           || [];
+    my $local_lib_dirs     = delete $args{local_lib_dirs}     || [];
     my $project_root_files = delete $args{project_root_files} || [];
 
     push @PROJECT_ROOT_FILES, @$project_root_files;
-    my @inc = find_inc($FindBin::Bin, $lib_dirs, ());
+    my @inc = find_inc($FindBin::Bin, $lib_dirs, $local_lib_dirs, ());
 
     if (scalar @inc) {
         my $inc = join ' ', @inc;
@@ -34,11 +36,19 @@ sub import {
 }
 
 sub find_inc {
-    my ($current_dir, $lib_dirs, @inc) = @_;
+    my ($current_dir, $lib_dirs, $local_lib_dirs, @inc) = @_;
     return @inc if $current_dir eq '/';
     chdir $current_dir;
 
     my @found = grep { -e File::Spec->catfile($current_dir, $_)} @$lib_dirs;
+
+    push @found,
+        grep { -e File::Spec->catfile($current_dir, $_) }
+            map {
+                File::Spec->catdir($_, 'lib', 'perl5'),
+                File::Spec->catdir($_, 'lib', 'perl5', $Config{archname}),
+            } (ref $local_lib_dirs eq 'ARRAY')
+                ? @$local_lib_dirs : $local_lib_dirs;
     push @inc, map { File::Spec->catfile($current_dir, $_)} @found;
 
     my @root_files = grep { -e $_ } @PROJECT_ROOT_FILES;
